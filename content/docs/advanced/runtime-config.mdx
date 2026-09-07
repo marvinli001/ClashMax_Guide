@@ -1,0 +1,146 @@
+---
+title: 运行时配置生成
+description: 从原始 YAML 到核心真正读到的那份配置，中间发生了什么，顺序如何。
+---
+
+这是理解 ClashMax 最重要的一页。**核心从来不读你导入的那份 YAML。** 每次启动前，ClashMax 会现场生成一份运行时配置，核心读的是它。
+
+这样做换来三件事：订阅原文永远干净；端口、secret、DNS、TUN 这些必须由 App 掌控的键有唯一所有者；配置被核心拒绝时可以整份丢弃回滚，而不用去修补用户的文件。
+
+## 生成管线
+
+下面是实际的执行顺序。**顺序即优先级**——后写的覆盖先写的。
+
+<Steps>
+<Step>
+### 选定基底
+
+按来源三选一：
+
+- **手动代理**：生成一份最小根配置（一个出站节点 + 本地/私有网段直连 + `MATCH,Proxy`）。
+- **provider 内容 / 分享链接**：用[生成模板](/docs/guide/profiles#生成模板)造一份配置，provider 内容单独落盘成一个文件被引用。
+- **完整 Clash 配置**：直接加载你的 YAML 作为根。
+</Step>
+
+<Step>
+### 合并遗留的 Runtime Merge YAML
+
+配置自带的 `runtimeMergeYAML` 在这里合入，列表策略是**追加**。
+
+因为它排在所有 App 管理键**之前**，所以它永远盖不过 `mode`、`tun.*`、`dns.enable`、geo 那几个键。这就是为什么它从来不是一个真正的逃生舱——真正的逃生舱在第 8 步。
+</Step>
+
+<Step>
+### 应用片段 DNS 补丁
+
+路由页里所有启用的 DNS 补丁片段，按顺序折叠进 `dns`。
+</Step>
+
+<Step>
+### 写入 App 管理的键
+
+这一批**无条件覆写**：
+
+```yaml
+mixed-port: <设置里的混合端口>
+external-controller: 127.0.0.1:<控制器端口>
+secret: <每次启动新生成>
+allow-lan: <设置>
+ipv6: <设置>
+mode: <运行模式>
+log-level: <设置>
+unified-delay: <设置>
+```
+
+紧接着是 geo 相关的四个键：`geo-auto-update`、`geo-update-interval`、`geodata-mode`、`geox-url`。
+
+<Callout>
+geo 键由 App 管理而不是从配置透传，是为了让它有唯一所有者。否则核心只会在第一次需要时下载一次 geo 数据库，此后永不刷新——你的 `GEOIP,CN` 和 `GEOSITE` 规则会一直匹配一份越来越旧的快照，而且没有任何可见信号。
+</Callout>
+
+`external-controller-cors` 开启时写入，关闭时**显式删除**——避免配置里残留一个你以为已经关掉的 CORS 设置。
+</Step>
+
+<Step>
+### DNS 与 TUN
+
+顺序依次是：
+
+1. 设置里的 DNS 覆盖开关（如果设了）写入 `dns.enable`，并同步 `dns.ipv6`。
+2. NE 路由设置：需要捕获 DNS 或 fake-ip 时，写 `dns.enable`、`dns.listen`，fake-ip 时写 `enhanced-mode: fake-ip` 和 `fake-ip-range`。
+3. TUN 块：写 `tun.enable`，并**移除 `auto-redirect`**（Linux 专有键，macOS 上写进去没有意义）。TUN 开启时再写 `stack`、`device`、`auto-route`、`strict-route`、`auto-detect-interface`、`dns-hijack`、`mtu`；排除路由网段会把配置里已有的和你设置的**合并去重**。
+4. TUN 开启且启用 fake-ip 时，DNS 会被自动打开并写入 fake-ip 相关键。
+5. 最后补一手：如果存在片段 DNS 补丁而 `dns.enable` 还不是 `true`，就自动打开它——**除非用户显式关掉了 DNS 覆盖**。
+
+<Callout type="warn">
+第 5 条是有来历的：一个从不设置 `dns.enable` 的 DNS 覆盖是完全无效的——Mihomo 根本不会启动 DNS 服务，会静默忽略每一个键，可生成的 YAML 和它的差异里却明明白白显示着你的改动。所以 ClashMax 替你把它打开；但用户显式关闭的开关是用户的决定，不会被反转。
+</Callout>
+</Step>
+
+<Step>
+### 嗅探
+
+配置自带的 `sniffer` 和片段里的嗅探补丁合成最终的嗅探计划，写回 `sniffer`。
+
+配置自己写的嗅探**原样透传**，哪怕它是无效的——那不是 ClashMax 该拒绝的东西。但你自己要求的嗅探会被校验，因为一个无效的嗅探器从外面看和正常的一模一样。详见 [DNS 与嗅探](/docs/advanced/dns-sniffer)。
+</Step>
+
+<Step>
+### 规则合并
+
+三层规则覆盖先合成一层（全局设置 + 配置级 + 片段），然后：
+
+```
+最终 rules = 前置规则
+           + (配置自带规则 − 被禁用匹配器命中的)
+           + 后置规则
+```
+
+各层内部的先后见[片段库](/docs/advanced/snippets#规则的最终顺序)。
+</Step>
+
+<Step>
+### 应用节点选择
+
+你在代理页选的节点写进对应组的 `now` 字段——前提是这个节点在该组里确实存在（provider 内容里的节点也算数）。不存在就跳过，而不是写一个核心不认识的名字进去。
+</Step>
+
+<Step>
+### 原始 YAML 片段（最后的话语权）
+
+所有 App 管理的键都已经写完，**此时**才合并原始 YAML 片段。所以它能覆盖 `mode`、`tun.*`、`dns.enable`、geo 键，以及 ClashMax 根本没有 UI 的任何键。
+
+这是真正的逃生舱。它被刻意放在出站代理处理**之前**，这样片段就不可能偷偷塞进一个保留出站名，最终的 DNS 校验也仍然看得到核心将要读到的东西。
+</Step>
+
+<Step>
+### 出站代理与最终校验
+
+如果配置了手动代理或上游代理：校验保留出站名没有被占用、应用上游代理、为出站代理注入 DNS bootstrap、必要时应用 TCP-only 出站策略。
+
+最后对**合并完成的结果**做一次 DNS 兼容性校验，然后序列化成 YAML。
+</Step>
+</Steps>
+
+## 为什么最后才校验 DNS
+
+因为只有最终的那份配置才知道 Mihomo 会不会接受它。举个真实的例子：Mihomo 无论 `dns.enable` 是什么值都会校验 `respect-rules`，一个看起来完全无效的 DNS 覆盖照样能让整个核心起不来（*「if "respect-rules" is turned on, "proxy-server-nameserver" cannot be empty」*）。而出站代理的 bootstrap 恰好可能提供 `proxy-server-nameserver`——所以只有合并后的最终映射才知道答案。
+
+ClashMax 在这里拦下它，给你一句具体的原因，而不是让核心崩一次。
+
+## 落盘方式
+
+生成好的配置不是直接覆盖旧文件：
+
+- 先写到一个带 UUID 的**唯一临时兄弟文件**，权限 `0600`，目录权限 `0700`
+- 原子 rename 到位
+- 任何一步失败都会清理已写入的文件，不留半成品
+- 保留最近若干代产物，旧的自动清理
+
+所以「生成到一半失败」不会污染上一次能用的运行时配置。
+
+## 怎么看到最终结果
+
+路由页有 **生效配置（Effective Config）** 工具：显示当前这份运行时配置的完整内容，以及**当前编辑中的片段带来了什么差异**。敏感字段在显示时会被遮蔽。
+
+改任何东西之前先看一眼它，比事后猜为什么没生效省时间得多。

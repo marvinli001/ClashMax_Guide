@@ -1,0 +1,82 @@
+---
+title: 整体架构
+description: 谁在跑核心、谁在管路由、App 和核心之间怎么说话。
+---
+
+ClashMax 只是一层 GUI 加一套配置生成逻辑，真正干活的是 Mihomo。理解它的关键是先分清**三个角色**。
+
+## 三个角色
+
+<Files>
+  <Folder name="ClashMax.app（GUI 进程）" defaultOpen>
+    <File name="配置管理 · 运行时配置生成" />
+    <File name="通过 REST + WebSocket 控制核心" />
+    <File name="系统代理设置的写入与恢复" />
+  </Folder>
+  <Folder name="Mihomo 核心（sidecar）" defaultOpen>
+    <File name="随 App 分发的内置二进制" />
+    <File name="真正的代理、DNS、规则匹配" />
+  </Folder>
+  <Folder name="特权组件（按需）" defaultOpen>
+    <File name="TUN helper（LaunchDaemon）" />
+    <File name="Network Extension（系统扩展，实验性）" />
+  </Folder>
+</Files>
+
+## 运行时所有者
+
+同一时刻，核心只可能属于以下五种状态之一。这个概念在整个 App 里反复出现，因为很多行为（尤其是[变更生效模型](/docs/advanced/apply-model)）取决于它：
+
+| 所有者 | 含义 |
+| --- | --- |
+| `stopped` | 没有核心在跑 |
+| `user` | 用户态核心，系统代理模式 |
+| `tunnel` | 特权 helper 启动的核心，TUN 模式 |
+| `networkExtension` | Network Extension 持有的核心，NE 代理模式 |
+| `preview` | 为延迟测试临时起的预览核心，**不承载用户流量** |
+
+`preview` 单独成一档很重要：预览核心在跑并不等于「运行时在服务用户流量」，所以此时所有配置修改都归入「下次启动生效」。
+
+## 控制通道
+
+App 不解析核心的 stdout，也不改核心的运行内存——所有交互都走 Mihomo 的 REST + WebSocket 控制面：
+
+| 用途 | 接口 |
+| --- | --- |
+| 版本、配置 | `GET /version`、`GET /configs` |
+| 修改运行模式 / IPv6 / TUN | `PATCH /configs` |
+| 重载配置 | `PUT /configs?force=true` |
+| 代理组与节点 | `GET /proxies`、`PUT /proxies/{name}` |
+| 延迟测试 | 单节点与整组两种 |
+| Provider | 更新、健康检查 |
+| 规则 | `GET /rules`、rule-provider 更新 |
+| 连接 | 列表、关闭单条、关闭全部 |
+| DNS | 查询、清空 fake-ip 缓存 |
+| Geo 数据库 | 触发更新 |
+| 实时流 | 流量、内存、日志、连接（WebSocket） |
+
+这条通道的安全边界：
+
+- controller 默认只监听 `127.0.0.1`
+- **每次启动生成新的 secret**，用 Bearer 认证
+- CORS 默认关闭，需要时才写 `external-controller-cors`
+
+因为「重载配置」这条路存在，绝大多数修改才可能做到热生效而不重启进程。
+
+## 内核策略
+
+MVP 阶段刻意保持单通道：**只支持 App 自带的内置 Mihomo 核心**。设置页会同时显示 App 版本、构建号和内置的 Mihomo 版本。
+
+这不是偷懒。将来若要支持自定义 core 通道，得先补齐 manifest、签名/哈希校验、helper 允许列表、UI 状态和回滚策略——在这些到位之前，让用户换 core 等于把一个未经校验的二进制交给特权 helper 去启动。
+
+## 磁盘上的分工
+
+| 位置 | 内容 |
+| --- | --- |
+| `Profiles/` | 你导入的原始 YAML，**只读不改** |
+| `Runtime/` | App 生成的运行时 YAML 与 provider 内容 |
+| `Subscriptions/` | 订阅相关的中间产物 |
+| `Logs/` | 运行时日志 |
+| Keychain | 订阅 URL、端点密码 |
+
+目录和文件权限见[文件与路径](/docs/reference/paths)。这条「原始与运行时分离」的边界，是下一页[运行时配置生成](/docs/advanced/runtime-config)的全部前提。

@@ -1,0 +1,163 @@
+---
+title: DNS 与嗅探
+description: 域名从哪来、为什么域名规则会「结构性失效」，以及 ClashMax 的默认嗅探配置为什么长那样。
+---
+
+这一页解释一个反复出现的困惑：**规则明明写对了，却从来不命中。**
+
+## 域名是怎么丢的
+
+Mihomo 的 `DOMAIN`、`DOMAIN-SUFFIX`、`DOMAIN-KEYWORD`、`GEOSITE` 规则都要求连接身上带着域名。但一条**直接打到 IP** 的连接根本没有域名——那么为它写的所有域名规则**在结构上就不可能被命中**。不是匹配失败，是压根没有可匹配的东西。
+
+域名有三个可能的来源：
+
+<Steps>
+<Step>
+### 客户端自己说了
+
+HTTP `CONNECT`、SOCKS5 主机名，或者 fake-ip 查询被核心映射回域名。这是最理想的情况。
+</Step>
+
+<Step>
+### 嗅探器从流量里恢复
+
+客户端没说，但嗅探器从 TLS 的 SNI 或 HTTP 的 `Host` 头里读出来了。
+</Step>
+
+<Step>
+### 两条都没有
+
+这条连接就是没有域名。域名规则对它无效，只有 IP 类规则还能用。
+</Step>
+</Steps>
+
+连接页的**域名可见性**筛选就是按这三档分的。
+
+## 嗅探
+
+### ClashMax 的托管默认值
+
+配置自己没写 `sniffer` 块时，ClashMax 会生成一份托管默认：
+
+```yaml
+sniffer:
+  enable: true
+  override-destination: true
+  sniff:
+    TLS: { ports: [443, 8443] }
+    HTTP: { ports: [80, 8080-8880] }
+  skip-domain:
+    - Mijia Cloud
+    - +.push.apple.com
+```
+
+两条 `skip-domain` 是每个 Mihomo 部署最后都会加上的：小米云的协议会被 TLS 嗅探器误读，而苹果推送连接在目标被改写后会断。
+
+### 端口列表不能省
+
+<Callout type="warn">
+`sniff: {TLS: {}}` 里那个空的端口列表**不是「所有端口」，也不是「没有端口」——是每个协议一个默认端口**。
+
+实测（内置 v1.19.29）：`TLS: {}` 只嗅探 443，8443 和 9443 完全放过；`HTTP: {}` 只嗅探 80，8080 放过。把那些非标准端口加回条目里，它们就又能嗅探了。
+
+所以 ClashMax 的默认端口列表**故意比核心的 fallback 宽**——这些协议在实际部署里经常跑在备用端口上。
+</Callout>
+
+### 协议与传输层的对应
+
+| 协议 | 传输层 | 域名来自 |
+| --- | --- | --- |
+| TLS | TCP | SNI |
+| HTTP | TCP | `Host` 头 |
+| QUIC | UDP | QUIC 握手 |
+
+<Callout>
+TLS 和 HTTP 只注册在 TCP 上，QUIC 只在 UDP 上。所以**一条没有域名的 UDP 流不会因为你列了再多 TCP 端口而变得有域名**——只有 QUIC 条目看得见它。
+</Callout>
+
+### override-destination
+
+嗅探到域名后，是否用它**替换**连接的 IP 目标。核心默认开启，ClashMax 的托管默认也开启。
+
+开启后，规则、日志、连接列表里显示的都是真实主机名，而不是一个裸 IP。这正是你想要的——除非某个服务（比如苹果推送）恰好会因此断开，那就把它放进 `skip-domain`。
+
+### 配置自带的嗅探怎么处理
+
+| 情况 | ClashMax 的动作 |
+| --- | --- |
+| 配置没写 sniffer，也没有片段 | 用托管默认 |
+| 配置没写 sniffer，有嗅探片段 | 托管默认 + 片段 |
+| 配置写了 sniffer，没有片段 | **原样保留** |
+| 配置写了 sniffer，有片段 | 在配置的块上**就地打补丁** |
+
+<Callout>
+配置自己写的嗅探块永远不会被从类型化视图重新生成，而是就地打补丁——这样 ClashMax 没有建模的键能原样存活。
+
+而且配置自带的嗅探即使是无效的也会被透传：那不是 ClashMax 该替用户否决的东西。但**你自己要求的**嗅探设置会被校验，因为一个无效的嗅探器从外面看和正常的一模一样。
+</Callout>
+
+### 为什么要生成 sniffer 块
+
+因为 `GET /configs` 只报告一个 `sniffing` 布尔值。生成的这个块是**唯一一份诚实的记录**，说明实际在嗅探什么——诊断和连接页的域名判定都基于它，而不是那个布尔值。
+
+## DNS
+
+### 可配置的键
+
+TUN 设置和 DNS 补丁片段能覆盖的键包括：
+
+```
+prefer-h3 · use-hosts · use-system-hosts · respect-rules
+default-nameserver · nameserver · fallback
+proxy-server-nameserver · direct-nameserver
+direct-nameserver-follow-policy
+nameserver-policy · proxy-server-nameserver-policy
+hosts · fake-ip-filter · fallback-filter
+```
+
+`fallback-filter` 下还有 `geoip`、`geoip-code`、`geosite`、`ipcidr`、`domain`。
+
+### 自动启用的规则
+
+一个从不设置 `dns.enable` 的 DNS 覆盖是**完全无效的**：Mihomo 不会启动 DNS 服务器，会静默忽略每一个键——可生成的 YAML 和差异视图里，你的改动却明明白白写在那里。
+
+所以：
+
+- TUN 开启时会自行打开 DNS。
+- 存在 DNS 补丁片段时，如果 `dns.enable` 还不是 `true`，ClashMax 替你打开它。
+- **但用户显式关掉的 DNS 覆盖开关不会被反转**——那是用户的决定。
+
+### 会让核心起不来的组合
+
+Mihomo **无论 `dns.enable` 是什么值**都会校验 `respect-rules`。所以一个看起来完全无效的 DNS 覆盖照样能把整个核心带崩：
+
+> if "respect-rules" is turned on, "proxy-server-nameserver" cannot be empty
+
+ClashMax 在生成阶段就拦下这类组合，给出具体原因。而且校验的是**合并后的最终结果**——因为出站代理的 bootstrap 有可能恰好提供了 `proxy-server-nameserver`，只有最终映射知道答案。
+
+### Fake IP
+
+fake-ip 只在 TUN 或 NE 代理下可用（需要在对应设置里打开 **Fake IP DNS**）。`fake-ip-filter` 也只在 fake-ip 模式下生效。
+
+fake-ip 映射可能过期，路由页的**诊断**工具里有 **清空 Fake IP 缓存**。
+
+### 没有流量捕获，DNS 配置就不会发生任何事
+
+路由页的诊断会明说当前上下文：
+
+- 「TUN 已开启，其 DNS 劫持会把系统查询送到 Mihomo 的解析器。」
+- 「NE 代理已开启，被捕获的查询会使用 Mihomo 的解析器。」
+- 「没有流量捕获在生效，因此还没有查询到达 Mihomo 的解析器。」
+
+<Callout type="warn">
+系统代理模式下，macOS 的 DNS 查询**不经过** Mihomo——系统代理只接管 HTTP/HTTPS/SOCKS。想让规则按域名匹配，要么启用 DNS 覆盖，要么切到 TUN / NE 代理。
+</Callout>
+
+## 排查顺序
+
+<Steps>
+<Step>连接页看这条连接的**域名可见性**。是「没有域名」就到此为止——先解决域名。</Step>
+<Step>是「没有域名」但你以为该嗅探到：确认端口在嗅探列表里，且协议的传输层对得上（UDP 只有 QUIC）。</Step>
+<Step>域名有了但规则还是不命中：用路由页的**匹配模拟器**，看是不是被前面某条更宽的规则抢先命中。</Step>
+<Step>规则对了但 DNS 解析不对：用诊断里的 **解析 DNS**，并确认当前模式下查询真的会到达 Mihomo。</Step>
+</Steps>

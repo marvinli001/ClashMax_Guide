@@ -1,0 +1,31 @@
+@import 'tailwindcss';
+@import 'fumadocs-ui/css/neutral.css';
+@import 'fumadocs-ui/css/preset.css';
+
+/* 中文优先的字体栈：正文用系统黑体，代码保留等宽。 */
+@theme {
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, 'SF Pro SC', 'SF Pro Text', 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC', system-ui, sans-serif;
+  --font-mono:
+    'SF Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, 'PingFang SC',
+    monospace;
+}
+
+html {
+  scrollbar-gutter: stable;
+}
+
+html > body[data-scroll-locked] {
+  margin-right: 0px !important;
+  --removed-body-scroll-bar-size: 0px !important;
+}
+
+/* 中文行内排版：稍微放宽行高，表格里的短标签不要被强行断行。 */
+#nd-docs-layout .prose :where(p, li) {
+  line-height: 1.8;
+}
+
+#nd-docs-layout .prose :where(td, th) {
+  text-wrap: pretty;
+}

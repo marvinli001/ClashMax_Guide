@@ -1,0 +1,127 @@
+---
+title: 常见问题
+description: 高频问题与对应的排查路径。
+---
+
+<Accordions>
+
+<Accordion title="核心显示「运行中」，但流量没走代理">
+
+先看首页——它会主动报出原因，每条都带修复按钮。按可能性排序：
+
+1. **系统代理模式下，系统代理开关没打开。** 启动核心和开启系统代理是两件事。
+2. **系统代理被别的软件改掉了。** 打开首页系统代理设置里的**代理守卫**。
+3. **系统代理仍指向旧端口。** 首页会明确提示，点修复。
+4. **TUN / NE 授权掉了。** 去[状态页](/docs/guide/status)看具体是哪一步。
+
+</Accordion>
+
+<Accordion title="我加的域名规则从来不命中">
+
+九成是**域名可见性**问题，不是规则写错了。
+
+去连接页选中那条连接，看域名来源。如果是「没有域名」，那么所有 `DOMAIN` / `DOMAIN-SUFFIX` / `DOMAIN-KEYWORD` / `GEOSITE` 规则对它**在结构上就不可能命中**。
+
+解法：启用 DNS 覆盖，或打开嗅探器，或切到 TUN / NE 代理。完整说明见 [DNS 与嗅探](/docs/advanced/dns-sniffer)。
+
+如果域名是有的，那就用路由页的**匹配模拟器**——多半是被前面某条更宽的规则抢先命中了。规则页会显示每条规则的**来源**和它在链上的位置。
+
+</Accordion>
+
+<Accordion title="改了设置，好像什么都没发生">
+
+看编辑器在你保存**之前**显示的那行字，它已经说了这次修改会做什么：热重载、需要重启、下次启动生效。保存之后还会再确认一次实际结果。
+
+如果结果是「**已回滚**」，说明运行时拒绝了这次改动，旁边会写明原因。
+
+特别注意：**预览运行时在跑的时候，所有修改都算「下次启动生效」**——预览核心只服务延迟测试，真正的运行时并没有起来。
+
+完整规则见[变更生效模型](/docs/advanced/apply-model)。
+
+</Accordion>
+
+<Accordion title="怎么覆盖一个 ClashMax 没有开关的 Mihomo 键">
+
+用**路由页 → 新建片段 → 原始 YAML**。它在管线里排在所有 App 管理键之后，所以 `mode`、`tun.*`、`dns.enable`、geo 键以及任何 ClashMax 没建模的键都能覆盖。
+
+三个例外：`mixed-port`、`external-controller`（及其变体）、`secret` 是保留键——它们是应用、预检、回滚所依赖的通道，在**设置**里改。
+
+不要用配置里的 `Runtime Merge YAML`：它在 App 写入管理键**之前**合并，覆盖不了那些键。
+
+</Accordion>
+
+<Accordion title="选了 Debug 日志级别，但没有 debug 输出">
+
+这个问题已经修了。现在**日志级别是唯一权威**：选了 Debug 就能看到 debug 条目，不需要同时打开开发者模式。
+
+旧版的行为是核心确实按 debug 输出了，但页面又把 debug 条目过滤掉了。如果你还遇到这个现象，先升级。
+
+</Accordion>
+
+<Accordion title="订阅更新失败了">
+
+配置详情里有**历史**，每次更新都记了触发方式和失败分类（网络 / HTTP 状态 / 解码 / 面板响应 / 配置非法 / 预检 / 取消 / 跳过）。
+
+- **网络类失败**：改 provider 选项里的**下载方式**。机场地址被墙时，「本地 Clash 代理」通常是唯一能成的一档（需要已有一份能用的配置在跑）。
+- **预检失败**：订阅内容本身有问题。ClashMax 拦下了它，所以正在跑的核心没受影响。**Preflight Output** 里有具体原因。
+- **改完 provider 选项就起不来**：用配置详情里的**回滚到上次可用**。
+
+</Accordion>
+
+<Accordion title="切了节点，但连接还在走旧节点">
+
+已建立的连接会继续用旧节点直到自己结束。想让切换立刻生效，打开代理页的**切换后关闭旧连接**。
+
+也可以在连接页手动**关闭全部连接**。
+
+</Accordion>
+
+<Accordion title="能不能换一个 Mihomo 内核">
+
+不能。ClashMax 只支持 App 自带的内置核心，内核版本与 App release 绑定。
+
+原因是特权 helper 会启动那个二进制——开放 core 通道需要先有 manifest、签名/哈希校验、helper 允许列表、UI 状态和回滚策略。在那之前，让用户换 core 等于把一个未经校验的二进制交给 root 去执行。
+
+</Accordion>
+
+<Accordion title="TUN 需要 helper，但批准流程卡住了">
+
+**设置 → 系统 → TUN Helper 状态** 会显示卡在哪一步：
+
+- **等待批准** → 去 **系统设置 → 通用 → 登录项与扩展** 打开 ClashMax，ClashMax 会自己发现
+- **协议版本过旧** / **launchd 起不来** → 点 **修复 Helper** 重装内置 helper，需要时再批准一次
+
+LaunchDaemon 的批准由 macOS 掌管，点「注册」有可能直接打开系统设置而不是弹出 App 内的表单，这是正常的。
+
+另外确认 App 是从 `/Applications` 运行的——授权流程会校验安装位置。
+
+</Accordion>
+
+<Accordion title="NE 代理下改端口要重启，是 bug 吗">
+
+不是。NE 透明代理在**隧道启动时**就捕获了当前的入站端口和控制端点；NE 路由设置（DNS 捕获、fake-ip、系统 DNS 覆盖）同样只在启动时读取。
+
+这是 Network Extension 的配置模型决定的。ClashMax 能做的是如实说出来，而不是假装改动生效了。
+
+</Accordion>
+
+<Accordion title="日志能直接贴到 Issue 里吗">
+
+不能直接贴。用[状态页](/docs/guide/status)的**复制诊断**，它输出的是一份**已脱敏**的报告。
+
+即便如此也要扫一眼——私有域名可能出现在你自己写的规则里，脱敏规则不知道那些是敏感的。
+
+绝不能公开的内容清单见[安全边界](/docs/advanced/security#绝不要公开发布的内容)。
+
+</Accordion>
+
+</Accordions>
+
+## 去哪里提问
+
+| 渠道 | 适合什么 |
+| --- | --- |
+| [Issues](https://github.com/marvinli001/ClashMax/issues) | 可复现的 bug、足够明确的可执行反馈、可跟踪的开发任务 |
+| [Questions 讨论区](https://github.com/marvinli001/ClashMax/discussions) | 安装、使用、配置、运行时排障的问答 |
+| [Ideas 讨论区](https://github.com/marvinli001/ClashMax/discussions) | 早期功能想法与产品方向，收敛后再转成 Issue |
+| 私密安全报告 | 漏洞，**绝不开公开 Issue**，见[安全边界](/docs/advanced/security#报告漏洞) |

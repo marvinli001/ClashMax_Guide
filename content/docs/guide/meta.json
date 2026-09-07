@@ -1,0 +1,14 @@
+{
+  "title": "日常使用",
+  "pages": [
+    "profiles",
+    "proxies",
+    "routing-modes",
+    "connections",
+    "rules-logs",
+    "status",
+    "menubar",
+    "automation",
+    "backup"
+  ]
+}
