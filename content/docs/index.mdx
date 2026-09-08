@@ -1,58 +1,37 @@
 ---
-title: 关于这份文档
-description: ClashMax 是什么、这份文档怎么读、两条阅读路线分别通向哪里。
+title: 概览
+description: ClashMax 是什么，以及三条影响到处都能感觉到的基本设定。
 ---
 
-ClashMax 是一个用 SwiftUI 写的 macOS 原生 Mihomo 客户端。它不是跨平台外壳套一层网页，而是围绕 macOS 工作流做的代理控制台：导入配置、启动核心、切代理组、看连接和规则、跟日志，并在系统代理和 TUN 之间切换。
-
-这份文档只做两件事：
-
-- 帮日常用户**把它用顺手**——少踩坑，出问题能自己定位。
-- 帮进阶用户**看懂它的设计逻辑**——尤其是「原始配置 → 运行时配置」这条管线，以及一次修改到底会发生什么。
-
-## 两条路线
+ClashMax 是一个用 SwiftUI 写的 macOS 原生 Mihomo 客户端。导入配置、启动核心、切代理组、看连接和规则、跟日志，以及在系统代理和 TUN 之间切换。
 
 <Cards>
   <Card
-    title="我只想把代理跑起来"
+    title="入门"
     href="/docs/start/install"
-    description="安装 → 导入配置 → 选路由模式 → 会看连接和日志。"
+    description="安装、导入配置、选路由模式、看懂连接和日志。"
   />
   <Card
-    title="我想知道它内部怎么运作"
+    title="设计逻辑"
     href="/docs/advanced/architecture"
-    description="进程模型、配置生成管线、片段库优先级、变更生效边界。"
+    description="进程模型、配置生成管线、片段优先级、变更生效边界。"
   />
 </Cards>
 
-## 三条贯穿全篇的前提
+## 三条基本设定
 
-理解这三点，后面很多设计就不需要额外解释了。
+### 导入的配置不会被改写
 
-<Steps>
-<Step>
-### 你导入的配置永远不会被改写
+你的 YAML 原样存在本地。ClashMax 在启动前另外生成一份运行时配置，端口、controller、secret、DNS、TUN、运行模式都写在那一份里。在 App 里改的东西不会污染订阅原文。
 
-ClashMax 把你的 YAML 原样存在本地，启动前**另外生成**一份运行时配置，端口、controller、secret、DNS、TUN、运行模式全写在那一份里。你在 App 里改的东西不会污染订阅原文。
-</Step>
+### 内核随 App 分发
 
-<Step>
-### 内核随 App 一起分发
+Mihomo 核心内置在 App 包里，版本跟着 App release 走。不用自己下载或升级 core 二进制，App 里也没有切换 core 通道的开关。
 
-Mihomo 核心内置在 App 包里，版本与 App release 绑定。你不需要自己下载、升级或维护一个 core 二进制，App 里也没有切换 core 通道的开关。
-</Step>
+### 控制面只在本机
 
-<Step>
-### 控制面只在本机，且每次启动换密钥
-
-Mihomo 的 controller 默认只监听 `127.0.0.1`，每次启动生成新的 secret，App 用 Bearer 认证访问。所有配置、代理组、连接、日志数据都是通过这条本地通道拿的。
-</Step>
-</Steps>
-
-## 版本与准确性
-
-文档描述的是当前主线版本的行为。写作时对照的是仓库源码而非猜测，涉及具体键名和默认值的地方（比如运行时配置的写入顺序、原始 YAML 片段的保留键）都能在 App 里对得上。如果你的版本表现不同，以 App 内 **设置 → 更新** 显示的版本为准。
+Mihomo 的 controller 默认只监听 `127.0.0.1`，每次启动生成新的 secret，App 用 Bearer 认证访问。配置、代理组、连接、日志都是从这条本地通道拿的。
 
 <Callout type="warn">
-分享日志、截图或配置前，先去掉订阅 URL、节点凭据和私有域名。文档里所有示例都是构造的。
+分享日志、截图或配置前，先去掉订阅 URL、节点凭据和私有域名。
 </Callout>

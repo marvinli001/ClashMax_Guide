@@ -1,6 +1,5 @@
 export const appName = 'ClashMax 指南';
-export const appDescription =
-  'ClashMax 的使用技巧与设计逻辑文档：普通用户看得懂，进阶用户查得到。';
+export const appDescription = 'ClashMax 的安装、配置、排查与实现说明。';
 
 /** 站点公开地址，用于 metadataBase / OG 图片绝对路径。 */
 export const siteUrl =

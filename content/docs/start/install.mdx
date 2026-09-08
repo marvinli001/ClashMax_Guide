@@ -1,6 +1,6 @@
 ---
 title: 安装
-description: 从 GitHub Release 安装 ClashMax，以及为什么必须装到 /Applications。
+description: 从 GitHub Release 安装，以及为什么位置必须是 /Applications。
 ---
 
 ## 系统要求
@@ -19,7 +19,7 @@ description: 从 GitHub Release 安装 ClashMax，以及为什么必须装到 /A
 
 打开 [最新 Release](https://github.com/marvinli001/ClashMax/releases/latest)，下载 `ClashMax-X.Y.Z.dmg`。
 
-同一个 Release 里的 `ClashMax-X.Y.Z.zip` 是给应用内 Sparkle 自动更新用的，不是推荐的手动安装包。
+同一个 Release 里的 `ClashMax-X.Y.Z.zip` 是给应用内 Sparkle 自动更新用的，不是手动安装包。
 </Step>
 
 <Step>
@@ -36,21 +36,21 @@ description: 从 GitHub Release 安装 ClashMax，以及为什么必须装到 /A
 </Steps>
 
 <Callout type="warn">
-**必须从 `/Applications` 运行。** 特权 helper 授权和实验性的 Network Extension 都会校验 App 的安装位置，直接在 DMG 里或从「下载」文件夹运行会导致授权流程失败。ClashMax 检测到位置不对时会提示你搬家。
+必须从 `/Applications` 运行。特权 helper 授权和 Network Extension 都会校验 App 的安装位置，直接在 DMG 里或从「下载」文件夹运行会让授权流程失败。位置不对时 ClashMax 会提示，也可以让它自己复制过去。
 </Callout>
 
 ## 更新
 
-App 内 **设置 → 更新** 可以检查 App 更新（Sparkle）。每个 App release 都带着与之匹配的 Mihomo 稳定版内核，所以升级 App 就等于升级内核，同一处还会显示：
+**设置 → 更新** 里可以检查 App 更新，走的是 Sparkle。每个 App release 都带着匹配的 Mihomo 稳定版内核，升级 App 就等于升级内核。同一处显示两行：
 
-- **App Package**：App 版本与构建号
-- **Bundled Core**：随包内置的 Mihomo 版本
+- App Package：App 版本与构建号
+- Bundled Core：随包内置的 Mihomo 版本
 
 ## 卸载
 
-1. 在 App 里停止运行时，并把代理路由切回 **系统代理**（这样系统代理设置会被恢复）。
+1. 停止运行时，把代理路由切回系统代理，这样系统代理设置会被恢复。
 2. 退出 ClashMax，把 `/Applications/ClashMax.app` 移到废纸篓。
-3. 如果之前注册过 TUN helper，去 **系统设置 → 通用 → 登录项与扩展** 里移除对应条目。
-4. 需要彻底清理的话，删除 `~/Library/Application Support/ClashMax/`（配置、运行时产物、日志都在里面，详见[文件与路径](/docs/reference/paths)）。
+3. 注册过 TUN helper 的话，去 **系统设置 → 通用 → 登录项与扩展** 移除对应条目。
+4. 删除 `~/Library/Application Support/ClashMax/`，配置、运行时产物和日志都在里面（[文件与路径](/docs/reference/paths)）。
 
-订阅 URL 存在 Keychain，如果你介意残留，可在「钥匙串访问」里搜索 ClashMax 手动删除。
+订阅 URL 存在 Keychain 里，介意残留的话在「钥匙串访问」搜 ClashMax 手动删。

@@ -2,11 +2,6 @@
 
 [ClashMax](https://github.com/marvinli001/ClashMax) 的中文使用文档，基于 [Fumadocs](https://fumadocs.dev) + Next.js 静态导出。
 
-文档面向两类读者：
-
-- **普通用户** —— 安装、导入配置、选路由模式、自己定位问题。
-- **进阶用户** —— 运行时配置生成管线、片段库优先级、变更生效边界、安全边界。
-
 ## 本地开发
 
 ```bash
@@ -84,9 +79,9 @@ NEXT_PUBLIC_BASE_PATH=/ClashMax_Guide NEXT_PUBLIC_SITE_URL=https://marvinli001.g
 
 不设置 `NEXT_PUBLIC_BASE_PATH`，把 `NEXT_PUBLIC_SITE_URL` 换成实际域名，`out/` 直接丢给任何静态托管即可。
 
-## 关于内容准确性
+## 内容来源
 
-文档内容对照 ClashMax 源码撰写，涉及具体键名、默认值、执行顺序的部分（运行时配置生成管线、原始 YAML 片段的保留键、嗅探默认端口等）都可以在源码里对上。ClashMax 行为变更后，相关页面需要同步更新。
+文档对照 ClashMax 源码撰写。涉及键名、默认值、执行顺序的部分（运行时配置生成管线、原始 YAML 片段的保留键、嗅探默认端口等）都能在源码里对上，ClashMax 行为变更后要同步更新。
 
 ## 许可
 

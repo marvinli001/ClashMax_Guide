@@ -1,65 +1,56 @@
 ---
 title: 安全边界
-description: 敏感数据存在哪、日志怎么脱敏、特权组件的信任边界、以及漏洞怎么报。
+description: 敏感数据存在哪、日志怎么脱敏、特权组件的信任边界、漏洞怎么报。
 ---
-
-一个会改动你系统网络设置的程序，靠说清楚边界赢得信任，而不是靠热情。这一页把边界摊开。
 
 ## 敏感数据存在哪
 
 | 数据 | 存放位置 | 说明 |
 | --- | --- | --- |
-| 导入的 YAML 配置 | 本地文件，**永不修改** | 端口、secret、DNS、TUN、模式全写在另生成的运行时配置里 |
-| 订阅 URL | **macOS Keychain**，按配置 ID 索引 | 不写进磁盘上的配置清单 |
+| 导入的 YAML 配置 | 本地文件，不修改 | 端口、secret、DNS、TUN、模式写在另生成的运行时配置里 |
+| 订阅 URL | macOS Keychain，按配置 ID 索引 | 不写进磁盘上的配置清单 |
 | 运行时配置 | ClashMax 托管的 Application Support 路径 | 权限 `0600`，目录 `0700` |
 | 控制器 secret | 内存，每次启动重新生成 | 不复用 |
 
 ## 控制面
 
-- controller 绑定 `127.0.0.1`
-- **每次启动生成新的 secret**
-- 控制 API 使用 Bearer 认证
-- CORS 默认关闭
+controller 绑定 `127.0.0.1`，每次启动生成新的 secret，控制 API 使用 Bearer 认证，CORS 默认关闭。
 
 ## 日志脱敏
 
-脱敏发生在**产生日志的那一刻**，早于日志进入内存环形缓冲、磁盘 JSONL 或被复制成诊断报告。覆盖认证头、token、密码、密钥和订阅 URL。
+脱敏发生在产生日志的那一刻，早于日志进入内存环形缓冲、磁盘 JSONL 或被复制成诊断报告。覆盖认证头、token、密码、密钥和订阅 URL。
 
-同时**刻意保留** scheme、主机、端口、错误域和错误码——脱敏之后日志还得能用来排查问题。
+scheme、主机、端口、错误域和错误码会保留，脱敏之后日志还得能用来排查问题。
 
 <Callout type="warn">
-如果有敏感值**穿过**了这道边界，那是安全漏洞，不是小毛病，请按下面的流程私下报告。
+有敏感值穿过这道边界属于安全漏洞，请按下面的流程私下报告。
 </Callout>
 
 ## 网络请求
 
-ClashMax **没有遥测**，不收集分析数据，不把配置内容发到任何地方。它自己发起的网络请求只有三类：
-
-1. 你提供的订阅 URL 的更新请求
-2. Sparkle 更新用的 appcast
-3. 可选的公网 IP 探测
+ClashMax 没有遥测，不收集分析数据，不把配置内容发到任何地方。它自己发起的网络请求只有三类：你提供的订阅 URL 的更新请求、Sparkle 更新用的 appcast、可选的公网 IP 探测。
 
 ## 特权组件
 
 ### TUN helper
 
-一个 root LaunchDaemon，拥有 TUN 模式。它的信任边界：
+一个 root LaunchDaemon，拥有 TUN 模式。信任边界是：
 
-- 每个进来的 XPC 连接都要通过**代码签名要求**和客户端策略校验
-- 核心二进制、运行时配置、工作目录都被限制在**允许的根路径**内
+- 每个进来的 XPC 连接都要通过代码签名要求和客户端策略校验
+- 核心二进制、运行时配置、工作目录都被限制在允许的根路径内
 - 校验与执行之间的 TOCTOU 是明确在意的攻击面
 
 ### Network Extension（实验性）
 
-透明代理提供者，涉及 SOCKS5 CONNECT / UDP ASSOCIATE、`127.0.0.1:1053` 的本地 DNS 监听、以及 53 端口捕获。
+透明代理提供者，涉及 SOCKS5 CONNECT / UDP ASSOCIATE、`127.0.0.1:1053` 的本地 DNS 监听、53 端口捕获。
 
-停止扩展后必须正确恢复 macOS 服务的 DNS 快照——留下一个临时 DNS 服务器是明确的安全问题。
+停止扩展后必须正确恢复 macOS 服务的 DNS 快照，留下一个临时 DNS 服务器属于安全问题。
 
 ### 单核心策略
 
-ClashMax **只支持 App 自带的内置 Mihomo 核心**。让它运行另一个二进制的方法属于安全问题。
+ClashMax 只支持 App 自带的内置 Mihomo 核心。让它运行另一个二进制的方法属于安全问题。
 
-这不是限制用户自由，而是因为特权 helper 会启动那个二进制。要开放 core 通道，得先有 manifest、签名/哈希校验、helper 允许列表、UI 状态和回滚策略。
+特权 helper 会启动那个二进制，所以要开放 core 通道，得先有 manifest、签名和哈希校验、helper 允许列表、UI 状态和回滚策略。
 
 ### 平台正确性
 
@@ -68,33 +59,33 @@ macOS 的 TUN 运行时配置不写 Linux 专有的 `auto-redirect`。
 ## 报告漏洞
 
 <Callout type="warn">
-**私下报告，绝不为漏洞开公开 Issue。**
+私下报告，不要为漏洞开公开 Issue。
 </Callout>
 
 按优先级：
 
-1. [GitHub 私密漏洞报告](https://github.com/marvinli001/ClashMax/security/advisories/new)（推荐）
+1. [GitHub 私密漏洞报告](https://github.com/marvinli001/ClashMax/security/advisories/new)，推荐
 2. 邮件，主题里写 `ClashMax security`
-3. 两条都不通时，开一个公开 Issue **只说明受影响的界面并索要私下联系方式**——不要放利用步骤、日志或机密
+3. 两条都不通时，开一个公开 Issue 只说明受影响的界面并索要私下联系方式，不要放利用步骤、日志或机密
 
-报告里请包含：ClashMax 版本与构建号、macOS 版本与 CPU 架构、涉及哪种路由（系统代理 / TUN / NE 代理）及当时运行时是否在跑、最小复现步骤、**脱敏后的**配置片段、以及你理解的影响面。
+报告里请包含：ClashMax 版本与构建号、macOS 版本与 CPU 架构、涉及哪种路由（系统代理 / TUN / NE 代理）及当时运行时是否在跑、最小复现步骤、脱敏后的配置片段、以及你理解的影响面。
 
-## 绝不要公开发布的内容
+## 不要公开发布的内容
 
-Issue、讨论、PR、截图、录屏、日志、示例配置、CI 日志，一律适用：
+Issue、讨论、PR、截图、录屏、日志、示例配置、CI 日志都适用：
 
-- **订阅 URL**，包括短链和任何带 `token` / `sub` / `uuid` 参数的 URL——订阅 URL 就是 bearer 凭据，谁拿到谁就有你的节点
-- **节点凭据**：密码、UUID、预共享密钥、Shadowsocks/Trojan/VLESS 密钥、证书、私钥
-- **ClashMax 控制器 secret**，以及任何外部面板的 Bearer token
-- **私有域名与主机名**、内部 DNS 名、以及会暴露内网命名的规则条目
-- **个人网络信息**：公网 IP、Wi-Fi SSID、MAC 地址、服务商账号标识
+- 订阅 URL，包括短链和任何带 `token`、`sub`、`uuid` 参数的 URL。订阅 URL 就是 bearer 凭据，谁拿到谁就有你的节点。
+- 节点凭据：密码、UUID、预共享密钥、Shadowsocks/Trojan/VLESS 密钥、证书、私钥
+- ClashMax 控制器 secret，以及任何外部面板的 Bearer token
+- 私有域名与主机名、内部 DNS 名，以及会暴露内网命名的规则条目
+- 个人网络信息：公网 IP、Wi-Fi SSID、MAC 地址、服务商账号标识
 
 用占位符替换：`https://example.com/sub?token=<redacted>`、`internal.example`、`1.2.3.4`。
 
 <Callout>
-如果已经发出去了，**告诉维护者**——评论可以编辑或隐藏，但那个值应当视为已泄露，请立即轮换。
+已经发出去的话告诉维护者，评论可以编辑或隐藏，但那个值应当视为已泄露，请轮换。
 </Callout>
 
 ## 许可证
 
-ClashMax 以 **GPL-3.0** 发布。它分发并控制 Mihomo，所以保持与 Mihomo 生态兼容的开源授权边界。
+ClashMax 以 GPL-3.0 发布。它分发并控制 Mihomo，所以保持与 Mihomo 生态兼容的开源授权边界。
