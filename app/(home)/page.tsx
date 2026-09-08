@@ -1,5 +1,7 @@
+import Image from 'next/image';
 import Link from 'next/link';
 import { productLinks } from '@/lib/shared';
+import icon from '@/public/clashmax-icon.png';
 
 const tracks = [
   {
@@ -37,12 +39,24 @@ export default function HomePage() {
   return (
     <main className="flex flex-1 flex-col items-center px-6 py-16 md:py-24">
       <div className="w-full max-w-4xl">
-        <p className="text-sm font-medium text-fd-muted-foreground">
-          ClashMax · macOS 原生 Mihomo 客户端
-        </p>
-        <h1 className="mt-3 text-4xl font-bold tracking-tight md:text-5xl">
-          ClashMax 指南
-        </h1>
+        <div className="flex items-center gap-4">
+          <Image
+            src={icon}
+            alt="ClashMax"
+            width={64}
+            height={64}
+            className="rounded-[14px] ring-1 ring-fd-border shadow-sm"
+            priority
+          />
+          <div>
+            <p className="text-sm font-medium text-fd-muted-foreground">
+              ClashMax · macOS 原生 Mihomo 客户端
+            </p>
+            <h1 className="mt-1 text-4xl font-bold tracking-tight md:text-5xl">
+              ClashMax 指南
+            </h1>
+          </div>
+        </div>
         <p className="mt-4 max-w-2xl text-lg text-fd-muted-foreground">
           一份写给两类人的文档：想把代理跑顺的日常用户，和想弄清楚它为什么这样设计的进阶用户。
         </p>
